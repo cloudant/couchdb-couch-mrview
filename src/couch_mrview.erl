@@ -338,15 +338,12 @@ get_view_info(Db, DDoc, VName) ->
 
 
 %% @doc refresh a view index
-refresh(#db{name=DbName}, DDoc) ->
-    refresh(DbName, DDoc);
-
-refresh(Db, DDoc) ->
-    UpdateSeq = couch_util:with_db(Db, fun(WDb) ->
+refresh(DbName, DDoc) when is_binary(DbName) ->
+    UpdateSeq = couch_util:with_db(DbName, fun(WDb) ->
                     couch_db:get_update_seq(WDb)
             end),
 
-    case couch_index_server:get_index(couch_mrview_index, Db, DDoc) of
+    case couch_index_server:get_index(couch_mrview_index, DbName, DDoc) of
         {ok, Pid} ->
             case catch couch_index:get_state(Pid, UpdateSeq) of
                 {ok, _} -> ok;
@@ -354,7 +351,11 @@ refresh(Db, DDoc) ->
             end;
         Error ->
             {error, Error}
-    end.
+    end;
+refresh(Db, DDoc) ->
+    refresh(couch_db:name(Db), DDoc).
+
+
 
 compact(Db, DDoc) ->
     compact(Db, DDoc, []).
@@ -395,8 +396,13 @@ all_docs_fold(Db, #mrargs{keys=undefined}=Args, Callback, UAcc) ->
         update_seq=UpdateSeq,
         args=Args
     },
-    [Opts] = couch_mrview_util:all_docs_key_opts(Args),
-    {ok, Offset, FinalAcc} = couch_db:enum_docs(Db, fun map_fold/3, Acc, Opts),
+    [Opts1] = couch_mrview_util:all_docs_key_opts(Args),
+    % TODO: This is a terrible hack for now. We'll probably have
+    % to rewrite _all_docs to not be part of mrview and not expect
+    % a btree. For now non-btree's will just have to pass 0 or
+    % some fake reductions to get an offset.
+    Opts2 = [include_reductions | Opts1],
+    {ok, Offset, FinalAcc} = couch_db:fold_docs(Db, fun map_fold/3, Acc, Opts2),
     finish_fold(FinalAcc, [{total, Total}, {offset, Offset}]);
 all_docs_fold(Db, #mrargs{direction=Dir, keys=Keys0}=Args, Callback, UAcc) ->
     {ok, Info} = couch_db:get_db_info(Db),

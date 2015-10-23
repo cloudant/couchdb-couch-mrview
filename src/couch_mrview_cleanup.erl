@@ -47,7 +47,10 @@ run(Db) ->
     ok.
 
 delete_view_file(RootDir, FullFilePath) ->
-    couch_server:delete_file(RootDir, FullFilePath, [sync]).
+    % TODO: Undo this
+    % Disabled until I move delete_file to couch_bt_engine
+    % couch_server:delete_file(RootDir, FullFilePath, [sync]).
+    couch_file:delete(RootDir, FullFilePath).
 
 -ifdef(TEST).
 -include_lib("couch/include/couch_eunit.hrl").

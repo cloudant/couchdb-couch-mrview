@@ -238,7 +238,7 @@ init_state(Db, Fd, State, Header) ->
     end,
     ViewStates2 = lists:map(StateUpdate, ViewStates),
 
-    IdBtOpts = [{compression, couch_db:compression(Db)}],
+    IdBtOpts = [{compression, couch_compress:get_compression_method()}],
     {ok, IdBtree} = couch_btree:open(IdBtreeState, Fd, IdBtOpts),
     {ok, LogBtree} = case SeqIndexed orelse KeySeqIndexed of
         true -> couch_btree:open(LogBtreeState, Fd, IdBtOpts);
@@ -280,11 +280,11 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq}, View) ->
     ViewBtOpts = [
         {less, Less},
         {reduce, ReduceFun},
-        {compression, couch_db:compression(Db)}
+        {compression, couch_compress:get_compression_method()}
     ],
     {ok, Btree} = couch_btree:open(BTState, Fd, ViewBtOpts),
 
-    BySeqReduceFun = fun couch_db_updater:btree_by_seq_reduce/2,
+    BySeqReduceFun = fun couch_bt_engine:seq_tree_reduce/2,
     {ok, SeqBtree} = if View#mrview.seq_indexed ->
         ViewSeqBtOpts = [{reduce, BySeqReduceFun},
                          {compression, couch_db:compression(Db)}],
@@ -294,9 +294,11 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq}, View) ->
         {ok, nil}
     end,
     {ok, KeyBySeqBtree} = if View#mrview.keyseq_indexed ->
-        KeyBySeqBtOpts = [{less, Less},
-                          {reduce, BySeqReduceFun},
-                          {compression, couch_db:compression(Db)}],
+        KeyBySeqBtOpts = [
+            {less, Less},
+            {reduce, BySeqReduceFun},
+            {compression, couch_compress:get_compression_method()}
+        ],
         couch_btree:open(KSeqBTState, Fd, KeyBySeqBtOpts);
     true ->
         {ok, nil}
@@ -334,7 +336,7 @@ get_row_count(#mrview{btree=Bt}) ->
 
 
 all_docs_reduce_to_count(Reductions) ->
-    Reduce = fun couch_db_updater:btree_by_id_reduce/2,
+    Reduce = fun couch_db_updater:id_tree_reduce/2,
     {Count, _, _} = couch_btree:final_reduce(Reduce, Reductions),
     Count.
 
