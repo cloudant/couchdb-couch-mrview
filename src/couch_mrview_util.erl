@@ -161,7 +161,7 @@ extract_view(Lang, #mrargs{view_type=red}=Args, Name, [View | Rest]) ->
 view_sig(Db, State, View, #mrargs{include_docs=true}=Args) ->
     BaseSig = view_sig(Db, State, View, Args#mrargs{include_docs=false}),
     UpdateSeq = couch_db:get_update_seq(Db),
-    PurgeSeq = couch_db:get_purge_seq(Db),
+    {ok, PurgeSeq} = couch_db:get_purge_seq(Db),
     #mrst{
         seq_indexed=SeqIndexed,
         keyseq_indexed=KeySeqIndexed
@@ -195,9 +195,10 @@ view_sig_term(BaseSig, UpdateSeq, PurgeSeq, KeySeqIndexed, SeqIndexed, Args) ->
 
 
 init_state(Db, Fd, #mrst{views=Views}=State, nil) ->
+    {ok, PurgeSeq} = couch_db:get_purge_seq(Db),
     Header = #mrheader{
         seq=0,
-        purge_seq=couch_db:get_purge_seq(Db),
+        purge_seq=PurgeSeq,
         id_btree_state=nil,
         log_btree_state=nil,
         view_states=[{nil, nil, nil, 0, 0} || _ <- Views]
