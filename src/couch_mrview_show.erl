@@ -363,7 +363,7 @@ json_req_obj(Req, Db) ->
         true ->
             % Use a separate process because we're already in a
             % receive loop, and json_req_obj calls fabric:get_db_info()
-            Ref = spawn_monitor(fun() ->
+            {_, Ref} = spawn_monitor(fun() ->
                 exit(chttpd_external:json_req_obj(Req, Db))
             end),
             receive
