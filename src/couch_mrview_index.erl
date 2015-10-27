@@ -133,8 +133,12 @@ open(Db, State) ->
                 % upgrade code for <= 1.2.x
                 {ok, {OldSig, Header}} ->
                     % Matching view signatures.
-                    NewSt = couch_mrview_util:init_state(Db, Fd, State, Header),
-                    {ok, NewSt#mrst{fd_monitor=erlang:monitor(process, Fd)}};
+                    NewSt0 = couch_mrview_util:init_state(Db,Fd,State,Header),
+                    NewSt = NewSt0#mrst{fd_monitor=erlang:monitor(process,Fd)},
+                    ok = commit(NewSt),
+                    IdxName = NewSt#mrst.idx_name,
+                    couch_event:notify(DbName, {index_commit, IdxName}),
+                    {ok, NewSt};
                 % end of upgrade code for <= 1.2.x
                 {ok, {Sig, Header}} ->
                     % Matching view signatures.

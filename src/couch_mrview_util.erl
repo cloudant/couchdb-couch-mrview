@@ -205,17 +205,22 @@ init_state(Db, Fd, #mrst{views=Views}=State, nil) ->
     init_state(Db, Fd, State, Header);
 % read <= 1.2.x header record and transpile it to >=1.3.x
 % header record
+init_state(Db, Fd, State, #index_header{id_btree_state=nil}) ->
+    init_state(Db, Fd, State, nil);
 init_state(Db, Fd, State, #index_header{
     seq=Seq,
     purge_seq=PurgeSeq,
     id_btree_state=IdBtreeState,
     view_states=ViewStates}) ->
+    NewViewStates = lists:map(fun({Pos, {Cnts, UsrReds, _DtSize}, Size}) ->
+        {{Pos, {Cnts, UsrReds}, Size}, nil, nil, Seq, PurgeSeq}
+    end, ViewStates),
     init_state(Db, Fd, State, #mrheader{
         seq=Seq,
         purge_seq=PurgeSeq,
         id_btree_state=IdBtreeState,
         log_btree_state=nil,
-        view_states=[{Bt, nil, nil, USeq, PSeq} || {Bt, USeq, PSeq} <- ViewStates]
+        view_states=NewViewStates
         });
 init_state(Db, Fd, State, Header) ->
     #mrst{
@@ -980,27 +985,55 @@ update_index_file(State) ->
         ok
     end.
 
-sig_vsn_12x(State) ->
-    ViewInfo = [old_view_format(V) || V <- State#mrst.views],
+sig_vsn_12x(#mrst{language=Lang, design_opts=Opts0} = State) ->
+    {DBCopies, Opts} = extract_dbcopy(Opts0),
+    ViewInfo = [old_view_format(V, DBCopies) || V <- State#mrst.views],
     SigData = case State#mrst.lib of
     {[]} ->
-        {ViewInfo, State#mrst.language, State#mrst.design_opts};
+        {ViewInfo, Lang, Opts};
     _ ->
-        {ViewInfo, State#mrst.language, State#mrst.design_opts,
-            couch_index_util:sort_lib(State#mrst.lib)}
+        {ViewInfo, Lang, Opts, couch_index_util:sort_lib(State#mrst.lib)}
     end,
     couch_crypto:hash(md5, term_to_binary(SigData)).
 
-old_view_format(View) ->
-{
-    view,
-    View#mrview.id_num,
-    View#mrview.map_names,
-    View#mrview.def,
-    View#mrview.btree,
-    View#mrview.reduce_funs,
-    View#mrview.options
-}.
+old_view_format(#mrview{reduce_funs=RedFuns} = View, AllDbCopies) ->
+    Names = [Name || {Name, _} <- RedFuns],
+    DbCopies = slice_dbcopy(Names, AllDbCopies),
+    {
+        view,
+        View#mrview.id_num,
+        View#mrview.map_names,
+        View#mrview.def,
+        View#mrview.btree,
+        RedFuns,
+        DbCopies,
+        View#mrview.options
+    }.
+
+extract_dbcopy([]) ->
+    {[], []};
+extract_dbcopy(Opts) ->
+    case lists:keytake(<<"epi">>, 1, Opts) of
+        false ->
+            {[], Opts};
+        {value, {_, {EPIOpts}}, Rest} ->
+            {DbCopies} = couch_util:get_value(<<"dbcopy">>, EPIOpts, {[]}),
+            {DbCopies, Rest}
+    end.
+
+slice_dbcopy(_, []) ->
+    [];
+slice_dbcopy(Names, AllDbCopies) ->
+    slice_dbcopy(Names, AllDbCopies, []).
+
+slice_dbcopy([], _, Acc) ->
+    lists:reverse(Acc);
+slice_dbcopy([Name|Names], AllDbCopies, Acc0) ->
+    Acc = case lists:keyfind(Name, 1, AllDbCopies) of
+        false -> Acc0;
+        Value -> [Value|Acc0]
+    end,
+    slice_dbcopy(Names, AllDbCopies, Acc).
 
 %% End of <= 1.2.x upgrade code.
 
