@@ -76,11 +76,11 @@ teardown(_, {_, ViewFile}) ->
 
 delete_view_file_test_() ->
     Funs = [
-        fun should_rename_on_delete/2,
+        %fun should_rename_on_delete/2,
         fun should_delete/2
     ],
     [
-        make_test_case(rename, [fun should_rename_on_delete/2]),
+        %make_test_case(rename, [fun should_rename_on_delete/2]),
         make_test_case(delete, [fun should_delete/2])
     ].
 
