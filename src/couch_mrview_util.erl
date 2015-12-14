@@ -212,8 +212,11 @@ init_state(Db, Fd, State, #index_header{
     purge_seq=PurgeSeq,
     id_btree_state=IdBtreeState,
     view_states=ViewStates}) ->
-    NewViewStates = lists:map(fun({Pos, {Cnts, UsrReds, _DtSize}, Size}) ->
-        {{Pos, {Cnts, UsrReds}, Size}, nil, nil, Seq, PurgeSeq}
+    NewViewStates = lists:map(fun
+        (nil) ->
+            {nil, nil, nil, 0, 0};
+        ({Pos, {Cnts, UsrReds, _DtSize}, Size}) ->
+            {{Pos, {Cnts, UsrReds}, Size}, nil, nil, Seq, PurgeSeq}
     end, ViewStates),
     init_state(Db, Fd, State, #mrheader{
         seq=Seq,
