@@ -274,10 +274,10 @@ open_view(Db, Fd, Lang, {BTState, SeqBTState, KSeqBTState, USeq, PSeq}, View) ->
             {ok, Result} = couch_query_servers:reduce(Lang, FunSrcs, KVs2),
             {length(KVs2), Result};
         (rereduce, Reds) ->
-            Count = lists:sum([Count0 || {Count0, _} <- Reds]),
-            UsrReds = [UsrRedsList || {_, UsrRedsList} <- Reds],
+            Counts = extract(counts, Reds),
+            UsrReds = extract(user_reds, Reds),
             {ok, Result} = couch_query_servers:rereduce(Lang, FunSrcs, UsrReds),
-            {Count, Result}
+            {lists:sum(Counts), Result}
         end,
 
     Less = case couch_util:get_value(<<"collation">>, View#mrview.options) of
@@ -357,10 +357,11 @@ reduce_to_count(Reductions) ->
             ],
             {lists:sum(Counts), []};
         (rereduce, Reds) ->
-            {lists:sum([Count0 || {Count0, _} <- Reds]), []}
+            Counts = extract(counts, Reds),
+            {lists:sum(Counts), []}
     end,
-    {Count, _} = couch_btree:final_reduce(Reduce, Reductions),
-    Count.
+    FinalReduction = couch_btree:final_reduce(Reduce, Reductions),
+    extract(counts, FinalReduction).
 
 %% @doc get all changes for a view
 get_view_changes_count(View) ->
@@ -432,15 +433,16 @@ fold_reduce({NthRed, Lang, View}, Fun,  Acc, Options) ->
             {ok, Red} = couch_query_servers:reduce(Lang, [FunSrc], KVs1),
             {0, LPad ++ Red ++ RPad};
         (rereduce, Reds) ->
-            ExtractRed = fun({_, UReds0}) -> [lists:nth(NthRed, UReds0)] end,
-            UReds = lists:map(ExtractRed, Reds),
+            ExtractRed = fun(UReds0) -> [lists:nth(NthRed, UReds0)] end,
+            UReds = lists:map(ExtractRed, extract(user_reds, Reds)),
             {ok, Red} = couch_query_servers:rereduce(Lang, [FunSrc], UReds),
             {0, LPad ++ Red ++ RPad}
     end,
 
     WrapperFun = fun({GroupedKey, _}, PartialReds, Acc0) ->
-        {_, Reds} = couch_btree:final_reduce(ReduceFun, PartialReds),
-        Fun(GroupedKey, lists:nth(NthRed, Reds), Acc0)
+        FinalReduction = couch_btree:final_reduce(ReduceFun, PartialReds),
+        UserReds = extract(user_reds, FinalReduction),
+        Fun(GroupedKey, lists:nth(NthRed, UserReds), Acc0)
     end,
 
     couch_btree:fold_reduce(Bt, WrapperFun, Acc, Options).
@@ -1039,6 +1041,16 @@ slice_dbcopy([Name|Names], AllDbCopies, Acc0) ->
     slice_dbcopy(Names, AllDbCopies, Acc).
 
 %% End of <= 1.2.x upgrade code.
+
+extract(user_reds, Red) when is_tuple(Red) ->
+    element(2, Red);
+extract(user_reds, Reds) ->
+    [extract(user_reds, Red) || Red <- Reds];
+extract(counts, Red) when is_tuple(Red) ->
+    element(1, Red);
+extract(counts, Reds) ->
+    [extract(counts, Red) || Red <- Reds].
+
 
 extract_view_reduce({red, {N, _Lang, #mrview{reduce_funs=Reds}}, _Ref}) ->
     {_Name, FunSrc} = lists:nth(N, Reds),
