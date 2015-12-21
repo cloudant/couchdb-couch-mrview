@@ -1042,14 +1042,14 @@ slice_dbcopy([Name|Names], AllDbCopies, Acc0) ->
 
 %% End of <= 1.2.x upgrade code.
 
-extract(counts, Red) when is_tuple(Red) ->
-    element(1, Red);
-extract(counts, Reds) ->
-    [extract(counts, Red) || Red <- Reds];
 extract(user_reds, Red) when is_tuple(Red) ->
     element(2, Red);
 extract(user_reds, Reds) ->
-    [extract(user_reds, Red) || Red <- Reds].
+    [extract(user_reds, Red) || Red <- Reds];
+extract(counts, Red) when is_tuple(Red) ->
+    element(1, Red);
+extract(counts, Reds) ->
+    [extract(counts, Red) || Red <- Reds].
 
 
 extract_view_reduce({red, {N, _Lang, #mrview{reduce_funs=Reds}}, _Ref}) ->
