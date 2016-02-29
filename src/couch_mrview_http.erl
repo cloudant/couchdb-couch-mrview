@@ -45,39 +45,39 @@
 handle_all_docs_req(#httpd{method='GET'}=Req, Db) ->
     all_docs_req(Req, Db, undefined);
 handle_all_docs_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    Keys = couch_mrview_util:get_view_keys(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    Keys = couch_mrview_util:get_view_keys(couch_httpd:json_body_obj(Req)),
     all_docs_req(Req, Db, Keys);
 handle_all_docs_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "GET,POST,HEAD").
+    couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
 handle_local_docs_req(#httpd{method='GET'}=Req, Db) ->
     all_docs_req(Req, Db, undefined, <<"_local">>);
 handle_local_docs_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    Keys = couch_mrview_util:get_view_keys(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    Keys = couch_mrview_util:get_view_keys(couch_httpd:json_body_obj(Req)),
     all_docs_req(Req, Db, Keys, <<"_local">>);
 handle_local_docs_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "GET,POST,HEAD").
+    couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
 handle_design_docs_req(#httpd{method='GET'}=Req, Db) ->
     all_docs_req(Req, Db, undefined, <<"_design">>);
 handle_design_docs_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
-    Keys = couch_mrview_util:get_view_keys(chttpd:json_body_obj(Req)),
+    couch_httpd:validate_ctype(Req, "application/json"),
+    Keys = couch_mrview_util:get_view_keys(couch_httpd:json_body_obj(Req)),
     all_docs_req(Req, Db, Keys, <<"_design">>);
 handle_design_docs_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "GET,POST,HEAD").
+    couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
 handle_reindex_req(#httpd{method='POST',
                           path_parts=[_, _, DName,<<"_reindex">>]}=Req,
                    Db, _DDoc) ->
-    chttpd:validate_ctype(Req, "application/json"),
+    couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_db:check_is_admin(Db),
     couch_mrview:trigger_update(Db, <<"_design/", DName/binary>>),
-    chttpd:send_json(Req, 201, {[{<<"ok">>, true}]});
+    couch_httpd:send_json(Req, 201, {[{<<"ok">>, true}]});
 handle_reindex_req(Req, _Db, _DDoc) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 handle_view_changes_req(#httpd{path_parts=[_,<<"_design">>,DDocName,<<"_view_changes">>,ViewName]}=Req, Db, DDoc) ->
@@ -109,15 +109,15 @@ handle_view_req(#httpd{method='GET',
     FinalInfo = [{db_name, Db#db.name},
                  {ddoc, DDocId},
                  {view, VName}] ++ Info,
-    chttpd:send_json(Req, 200, {FinalInfo});
+    couch_httpd:send_json(Req, 200, {FinalInfo});
 handle_view_req(#httpd{method='GET'}=Req, Db, DDoc) ->
     [_, _, _, _, ViewName] = Req#httpd.path_parts,
     couch_stats:increment_counter([couchdb, httpd, view_reads]),
     design_doc_view(Req, Db, DDoc, ViewName, undefined);
 handle_view_req(#httpd{method='POST'}=Req, Db, DDoc) ->
-    chttpd:validate_ctype(Req, "application/json"),
+    couch_httpd:validate_ctype(Req, "application/json"),
     [_, _, _, _, ViewName] = Req#httpd.path_parts,
-    Props = chttpd:json_body_obj(Req),
+    Props = couch_httpd:json_body_obj(Req),
     Keys = couch_mrview_util:get_view_keys(Props),
     Queries = couch_mrview_util:get_view_queries(Props),
     case {Queries, Keys} of
@@ -137,48 +137,48 @@ handle_view_req(#httpd{method='POST'}=Req, Db, DDoc) ->
             throw({bad_request, "`keys` and `queries` are mutually exclusive"})
     end;
 handle_view_req(Req, _Db, _DDoc) ->
-    chttpd:send_method_not_allowed(Req, "GET,POST,HEAD").
+    couch_httpd:send_method_not_allowed(Req, "GET,POST,HEAD").
 
 
 handle_temp_view_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
+    couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_db:check_is_admin(Db),
-    {Body} = chttpd:json_body_obj(Req),
+    {Body} = couch_httpd:json_body_obj(Req),
     DDoc = couch_mrview_util:temp_view_to_ddoc({Body}),
     Keys = couch_mrview_util:get_view_keys({Body}),
     couch_stats:increment_counter([couchdb, httpd, temporary_view_reads]),
     design_doc_view(Req, Db, DDoc, <<"temp">>, Keys);
 handle_temp_view_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 handle_info_req(#httpd{method='GET'}=Req, Db, DDoc) ->
     [_, _, Name, _] = Req#httpd.path_parts,
     {ok, Info} = couch_mrview:get_info(Db, DDoc),
-    chttpd:send_json(Req, 200, {[
+    couch_httpd:send_json(Req, 200, {[
         {name, Name},
         {view_index, {Info}}
     ]});
 handle_info_req(Req, _Db, _DDoc) ->
-    chttpd:send_method_not_allowed(Req, "GET").
+    couch_httpd:send_method_not_allowed(Req, "GET").
 
 
 handle_compact_req(#httpd{method='POST'}=Req, Db, DDoc) ->
-    chttpd:validate_ctype(Req, "application/json"),
+    couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_db:check_is_admin(Db),
     ok = couch_mrview:compact(Db, DDoc),
-    chttpd:send_json(Req, 202, {[{ok, true}]});
+    couch_httpd:send_json(Req, 202, {[{ok, true}]});
 handle_compact_req(Req, _Db, _DDoc) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 handle_cleanup_req(#httpd{method='POST'}=Req, Db) ->
-    chttpd:validate_ctype(Req, "application/json"),
+    couch_httpd:validate_ctype(Req, "application/json"),
     ok = couch_db:check_is_admin(Db),
     ok = couch_mrview:cleanup(Db),
-    chttpd:send_json(Req, 202, {[{ok, true}]});
+    couch_httpd:send_json(Req, 202, {[{ok, true}]});
 handle_cleanup_req(Req, _Db) ->
-    chttpd:send_method_not_allowed(Req, "POST").
+    couch_httpd:send_method_not_allowed(Req, "POST").
 
 
 all_docs_req(Req, Db, Keys) ->
@@ -234,7 +234,7 @@ do_all_docs_req(Req, Db, Keys, NS) ->
     end,
     Args = Args1#mrargs{preflight_fun=ETagFun},
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        Max = chttpd:chunked_response_buffer_size(),
+        Max = couch_httpd:chunked_response_buffer_size(),
         VAcc0 = #vacc{db=Db, req=Req, threshold=Max},
         DbName = ?b2l(Db#db.name),
         UsersDbName = config:get("couch_httpd_auth",
@@ -280,7 +280,7 @@ design_doc_view(Req, Db, DDoc, ViewName, Keys) ->
     end,
     Args = Args0#mrargs{preflight_fun=ETagFun},
     {ok, Resp} = couch_httpd:etag_maybe(Req, fun() ->
-        Max = chttpd:chunked_response_buffer_size(),
+        Max = couch_httpd:chunked_response_buffer_size(),
         VAcc0 = #vacc{db=Db, req=Req, threshold=Max},
         couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, VAcc0)
     end),
@@ -298,20 +298,20 @@ multi_query_view(Req, Db, DDoc, ViewName, Queries) ->
         couch_mrview_util:validate_args(QueryArg)
     end, Queries),
     {ok, Resp2} = couch_httpd:etag_maybe(Req, fun() ->
-        Max = chttpd:chunked_response_buffer_size(),
+        Max = couch_httpd:chunked_response_buffer_size(),
         VAcc0 = #vacc{db=Db, req=Req, prepend="\r\n", threshold=Max},
         %% TODO: proper calculation of etag
         Etag = [$", couch_uuids:new(), $"],
         Headers = [{"ETag", Etag}],
         FirstChunk = "{\"results\":[",
-        {ok, Resp0} = chttpd:start_delayed_json_response(VAcc0#vacc.req, 200, Headers, FirstChunk),
+        {ok, Resp0} = couch_httpd:start_delayed_json_response(VAcc0#vacc.req, 200, Headers, FirstChunk),
         VAcc1 = VAcc0#vacc{resp=Resp0},
         VAcc2 = lists:foldl(fun(Args, Acc0) ->
             {ok, Acc1} = couch_mrview:query_view(Db, DDoc, ViewName, Args, fun view_cb/2, Acc0),
             Acc1
         end, VAcc1, ArgQueries),
-        {ok, Resp1} = chttpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
-        {ok, Resp2} = chttpd:end_delayed_json_response(Resp1),
+        {ok, Resp1} = couch_httpd:send_delayed_chunk(VAcc2#vacc.resp, "\r\n]}"),
+        {ok, Resp2} = couch_httpd:end_delayed_json_response(Resp1),
         {ok, VAcc2#vacc{resp=Resp2}}
     end),
     case is_record(Resp2, vacc) of
@@ -337,7 +337,7 @@ filtered_view_cb(Obj, Acc) ->
 view_cb({meta, Meta}, #vacc{resp=undefined}=Acc) ->
     % Map function starting
     Headers = [],
-    {ok, Resp} = chttpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
+    {ok, Resp} = couch_httpd:start_delayed_json_response(Acc#vacc.req, 200, Headers),
     view_cb({meta, Meta}, Acc#vacc{resp=Resp, should_close=true});
 view_cb({meta, Meta}, #vacc{}=Acc) ->
     % Sending metadata
@@ -360,29 +360,29 @@ view_cb({row, Row}, Acc) ->
     maybe_flush_response(Acc, Chunk, iolist_size(Chunk));
 view_cb(complete, #vacc{resp=undefined}=Acc) ->
     % Nothing in view
-    {ok, Resp} = chttpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
+    {ok, Resp} = couch_httpd:send_json(Acc#vacc.req, 200, {[{rows, []}]}),
     {ok, Acc#vacc{resp=Resp}};
 view_cb(complete, #vacc{resp=Resp, buffer=Buf, threshold=Max}=Acc) ->
     % Finish view output and possibly end the response
-    {ok, Resp1} = chttpd:close_delayed_json_object(Resp, Buf, "\r\n]}", Max),
+    {ok, Resp1} = couch_httpd:close_delayed_json_object(Resp, Buf, "\r\n]}", Max),
     case Acc#vacc.should_close of
         true ->
-            {ok, Resp2} = chttpd:end_delayed_json_response(Resp1),
+            {ok, Resp2} = couch_httpd:end_delayed_json_response(Resp1),
             {ok, Acc#vacc{resp=Resp2}};
         _ ->
             {ok, Acc#vacc{resp=Resp1, prepend=",\r\n", buffer=[], bufsize=0}}
     end;
 view_cb({error, Reason}, #vacc{resp=undefined}=Acc) ->
-    {ok, Resp} = chttpd:send_error(Acc#vacc.req, Reason),
+    {ok, Resp} = couch_httpd:send_error(Acc#vacc.req, Reason),
     {ok, Acc#vacc{resp=Resp}};
 view_cb({error, Reason}, #vacc{resp=Resp}=Acc) ->
-    {ok, Resp1} = chttpd:send_delayed_error(Resp, Reason),
+    {ok, Resp1} = couch_httpd:send_delayed_error(Resp, Reason),
     {ok, Acc#vacc{resp=Resp1}}.
 
 maybe_flush_response(#vacc{bufsize=Size, threshold=Max} = Acc, Data, Len)
         when Size > 0 andalso (Size + Len) > Max ->
     #vacc{buffer = Buffer, resp = Resp} = Acc,
-    {ok, R1} = chttpd:send_delayed_chunk(Resp, Buffer),
+    {ok, R1} = couch_httpd:send_delayed_chunk(Resp, Buffer),
     {ok, Acc#vacc{prepend = ",\r\n", buffer = Data, bufsize = Len, resp = R1}};
 maybe_flush_response(Acc0, Data, Len) ->
     #vacc{buffer = Buf, bufsize = Size} = Acc0,
@@ -430,7 +430,7 @@ row_to_json(Id0, Row) ->
 
 
 parse_params(#httpd{}=Req, Keys) ->
-    parse_params(chttpd:qs(Req), Keys);
+    parse_params(couch_httpd:qs(Req), Keys);
 parse_params(Props, Keys) ->
     Args = #mrargs{},
     parse_params(Props, Keys, Args).
@@ -565,8 +565,8 @@ parse_pos_int(Val) ->
 
 
 check_view_etag(Sig, Acc0, Req) ->
-    ETag = chttpd:make_etag(Sig),
-    case chttpd:etag_match(Req, ETag) of
+    ETag = couch_httpd:make_etag(Sig),
+    case couch_httpd:etag_match(Req, ETag) of
         true -> throw({etag_match, ETag});
         false -> {ok, Acc0#vacc{etag=ETag}}
     end.
