@@ -80,10 +80,14 @@ should_remove(Db) ->
         ok = couch_index:compact(IndexPid, []),
         {ok, CompactorPid} = couch_index:get_compactor_pid(IndexPid),
         CompactingPid = couch_index_compactor:get_compacting_pid(CompactorPid),
+        ViewCompactPath = couch_util:get_value(view_compact_path,
+            couch_util:get_value(dictionary, process_info(CompactingPid))),
+        ?assert(filelib:is_regular(ViewCompactPath)),
         MonRef = erlang:monitor(process, CompactingPid),
         exit(CompactingPid, crash),
         receive
             {'DOWN', MonRef, process, _, crash} ->
+                ?assertNot(filelib:is_regular(ViewCompactPath)),
                 ?assert(is_process_alive(IndexPid)),
                 ?assert(is_process_alive(CompactorPid))
         after ?TIMEOUT ->

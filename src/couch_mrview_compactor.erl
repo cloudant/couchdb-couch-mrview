@@ -50,6 +50,7 @@ compact(State) ->
 
     {EmptyState, NumDocIds} = couch_util:with_db(DbName, fun(Db) ->
         CompactFName = couch_mrview_util:compaction_file(DbName, Sig),
+        put(view_compact_path, CompactFName),
         {ok, Fd} = couch_mrview_util:open_file(CompactFName),
         ESt = couch_mrview_util:reset_index(Db, Fd, State),
 
