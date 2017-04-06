@@ -20,9 +20,11 @@
 
 setup() ->
     {ok, Db} = couch_mrview_test_util:init_db(?tempdb(), map, 1000),
+    ok = meck:new(couch_mrview_compactor, [passthrough]),
     Db.
 
 teardown(Db) ->
+    meck:unload(),
     couch_db:close(Db),
     couch_server:delete(Db#db.name, [?ADMIN_CTX]),
     ok.
@@ -84,6 +86,8 @@ should_remove(Db) ->
         exit(CompactingPid, crash),
         receive
             {'DOWN', MonRef, process, _, crash} ->
+                ?assertEqual(1, meck:num_calls(
+                    couch_mrview_compactor, remove_compacted, '_', IndexPid)),
                 ?assert(is_process_alive(IndexPid)),
                 ?assert(is_process_alive(CompactorPid))
         after ?TIMEOUT ->
